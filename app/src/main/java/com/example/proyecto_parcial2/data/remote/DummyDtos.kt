@@ -1,4 +1,5 @@
 package com.example.proyecto_parcial2.data.remote
 
-interface AlgoApiService {
-}
+data class ProductResponse(
+    @SerializedName()
+)
