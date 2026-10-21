@@ -1,41 +1,72 @@
 package com.example.proyecto_parcial2.ui.screens.products
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.proyecto_parcial2.data.FavoritosRepository
 import com.example.proyecto_parcial2.data.ProductRepository
+import com.example.proyecto_parcial2.data.local.ProductDatabase
 import com.example.proyecto_parcial2.models.Cosas
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-sealed interface ProductsUiState {
-    data object Loading : ProductsUiState
-    data class Success(val products: List<Cosas>) : ProductsUiState
-    data class Error(val message: String) : ProductsUiState
-}
+data class ProductsUiState(
+    val products: List<Cosas> = emptyList(),
+    val cargando: Boolean = false,
+    val error: String? = null,
+    val favoritosIds: Set<Int> = emptySet()
+)
 
-class ProductsViewModel(
-    private val repository: ProductRepository = ProductRepository()
-) : ViewModel() {
+class ProductsViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow<ProductsUiState>(ProductsUiState.Loading)
-    val uiState: StateFlow<ProductsUiState> = _uiState.asStateFlow()
+    private val repository = ProductRepository()
+    private val favoritosRepository = FavoritosRepository(
+        ProductDatabase.obtener(application).productDao()
+    )
+
+    private val _estadoApi = MutableStateFlow(ProductsUiState(cargando = true))
+
+    val uiState: StateFlow<ProductsUiState> = combine(
+        _estadoApi,
+        favoritosRepository.observarIdsProductosFavoritos()
+    ) { estadoApi, ids ->
+        estadoApi.copy(favoritosIds = ids)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ProductsUiState(cargando = true)
+    )
 
     init {
         loadProducts()
     }
 
     fun loadProducts() {
+        _estadoApi.update { it.copy(cargando = true, error = null) }
         viewModelScope.launch {
-            _uiState.value = ProductsUiState.Loading
             repository.getProducts()
                 .onSuccess { list ->
-                    _uiState.value = ProductsUiState.Success(list)
+                    _estadoApi.update { it.copy(products = list, cargando = false) }
                 }
                 .onFailure { error ->
-                    _uiState.value = ProductsUiState.Error(error.localizedMessage ?: "Error desconocido")
+                    _estadoApi.update { it.copy(cargando = false, error = error.localizedMessage ?: "Error desconocido") }
                 }
+        }
+    }
+
+    fun alternarFavorito(product: Cosas) {
+        val esFavorito = product.id in uiState.value.favoritosIds
+        viewModelScope.launch {
+            if (esFavorito) {
+                favoritosRepository.quitarProducto(product.id)
+            } else {
+                favoritosRepository.agregarProducto(product)
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ object MapeadorProductoYPlaceholder {
     // 1. Mapeo para Product (ProductDto -> Cosas)
     fun mapProductDtoToCosas(dto: ProductDto): Cosas {
         return Cosas(
+            id = dto.id ?: 0,
             titulo = dto.title ?: "",
             descripcion = dto.description ?: "",
             categoria = dto.category ?: "",
