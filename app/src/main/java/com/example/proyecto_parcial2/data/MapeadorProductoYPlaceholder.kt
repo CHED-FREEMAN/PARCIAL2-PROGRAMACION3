@@ -27,6 +27,7 @@ object MapeadorProductoYPlaceholder {
     // 2. Mapeo para JSONPlaceholder (PostDto -> Placeholder)
     fun mapPostDtoToPlaceholder(dto: PostDto): Placeholder {
         return Placeholder(
+            id = dto.id ?: 0,
             title = dto.title ?: "",
             body = dto.body ?: ""
         )
